@@ -4,12 +4,11 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-
-from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     ATTR_DEPARTURE_COUNT,
@@ -116,17 +115,17 @@ class VasttrafikM34Sensor(CoordinatorEntity[VasttrafikDataUpdateCoordinator], Se
 
         dep = deps[0]
         show_delay = self._entry.options.get(CONF_SHOW_DELAY, DEFAULT_SHOW_DELAY)
-        time_part = f"kl. {dep.get('departure_time', '?')} ({dep.get('relative_time', '?')})"
-        dest = dep.get("destination") or ""
-        # Short destination for state (first part before comma)
-        short_dest = dest.split(",")[0].strip() if dest else ""
+        state = f"kl. {dep.get('departure_time', '?')} ({dep.get('relative_time', '?')})"
 
-        state = time_part
-        if short_dest:
-            # Keep state readable: "kl. 07:18 (3 min) → Resecentrum"
+        # Visa destination bara om man inte redan filtrerat på riktning
+        direction_filter = (self.coordinator.direction_filter or "").strip()
+        if not direction_filter:
+            dest = dep.get("destination") or ""
+            short_dest = dest.split(",")[0].strip() if dest else ""
             if "Resecentrum" in short_dest:
                 short_dest = "Resecentrum"
-            state = f"{time_part} → {short_dest}"
+            if short_dest:
+                state = f"{state} → {short_dest}"
 
         delay = int(dep.get("delay_minutes") or 0)
         if show_delay and delay > 0:
