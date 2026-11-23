@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Västtrafik M34",
+        "description": "Klistra in autentiseringsnyckeln från Västtrafiks utvecklarportal ({portal}). Det är Base64-kodade klientuppgifter.",
+        "data": {
+          "auth_key": "Autentiseringsnyckel"
+        }
+      },
+      "station": {
+        "title": "Sök hållplats",
+        "description": "Ange del av hållplatsnamnet ({station_example})",
+        "data": {
+          "station_name": "Hållplatsnamn"
+        }
+      },
+      "select_station": {
+        "title": "Välj hållplats",
+        "description": "Välj rätt hållplatsområde",
+        "data": {
+          "station": "Hållplats"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kunde inte ansluta till Västtrafiks API",
+      "invalid_auth": "Ogiltig autentiseringsnyckel",
+      "no_stations": "Inga hållplatser hittades – prova en annan sökning",
+      "invalid_station": "Ogiltig hållplats vald",
+      "unknown": "Oväntat fel"
+    },
+    "abort": {
+      "already_configured": "Denna hållplats är redan konfigurerad"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Västtrafik-alternativ",
+        "description": "Filtrera avgångar och justera uppdatering. Riktningsexempel: Resecentrum",
+        "data": {
+          "direction_filter": "Riktning (del av destination, t.ex. Resecentrum)",
+          "line_filter": "Linje (del av namn, t.ex. Buss 6)",
+          "exclude_cancelled": "Dölj inställda avgångar",
+          "show_delay": "Visa försening i state (+X min)",
+          "time_span_minutes": "Tidsfönster (minuter)",
+          "max_per_line": "Max avgångar per linje",
+          "update_interval": "Uppdateringsintervall (sekunder)"
+        }
+      }
+    }
+  }
+}

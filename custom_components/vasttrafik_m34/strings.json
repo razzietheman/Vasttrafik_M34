@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Västtrafik M34",
+        "description": "Paste the Authentication Key from the Västtrafik developer portal ({portal}). It is the Base64-encoded client credentials.",
+        "data": {
+          "auth_key": "Authentication key"
+        }
+      },
+      "station": {
+        "title": "Search stop",
+        "description": "Enter part of the stop name ({station_example})",
+        "data": {
+          "station_name": "Stop name"
+        }
+      },
+      "select_station": {
+        "title": "Select stop",
+        "description": "Choose the correct stop area",
+        "data": {
+          "station": "Stop"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to Västtrafik API",
+      "invalid_auth": "Invalid authentication key",
+      "no_stations": "No stops found – try another search",
+      "invalid_station": "Invalid stop selected",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This stop is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Västtrafik options",
+        "description": "Filter departures and adjust polling. Direction filter example: Resecentrum",
+        "data": {
+          "direction_filter": "Direction filter (substring, e.g. Resecentrum)",
+          "line_filter": "Line filter (substring, e.g. Buss 6)",
+          "exclude_cancelled": "Hide cancelled departures",
+          "show_delay": "Show delay in state (+X min)",
+          "time_span_minutes": "Time window (minutes)",
+          "max_per_line": "Max departures per line",
+          "update_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  }
+}
