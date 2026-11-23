@@ -2,19 +2,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_AUTH_KEY, CONF_STATION_GID, DOMAIN
 from .coordinator import VasttrafikDataUpdateCoordinator
-
-if TYPE_CHECKING:
-    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,17 +22,12 @@ type VasttrafikConfigEntry = ConfigEntry[VasttrafikDataUpdateCoordinator]
 async def async_setup_entry(hass: HomeAssistant, entry: VasttrafikConfigEntry) -> bool:
     """Set up Västtrafik M34 from a config entry."""
     if CONF_AUTH_KEY not in entry.data or CONF_STATION_GID not in entry.data:
-        _LOGGER.error("Missing required data in config entry")
-        return False
+        raise ConfigEntryError("Missing required data in config entry")
 
     session = async_get_clientsession(hass)
     coordinator = VasttrafikDataUpdateCoordinator(hass, entry, session)
     await coordinator.async_load_cache()
-
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as ex:
-        raise ConfigEntryNotReady(f"Failed to fetch departures: {ex}") from ex
+    await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

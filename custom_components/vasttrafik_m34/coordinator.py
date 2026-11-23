@@ -1,7 +1,7 @@
 """DataUpdateCoordinator for Västtrafik M34."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 
@@ -23,6 +23,7 @@ from .const import (
     CONF_STATION_GID,
     CONF_TIME_SPAN_MINUTES,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CACHE_MAX_AGE_MINUTES,
     DEFAULT_EXCLUDE_CANCELLED,
     DEFAULT_MAX_PER_LINE,
     DEFAULT_TIME_SPAN_MINUTES,
@@ -32,6 +33,32 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Fields that describe the actual departure (not the minute-by-minute countdown).
+_STABLE_FIELDS = (
+    "line",
+    "destination",
+    "planned_time",
+    "estimated_time",
+    "track",
+    "is_cancelled",
+    "is_realtime",
+    "transport_mode",
+)
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    """Return a timezone-aware datetime.
+
+    The API normally returns RFC 3339 timestamps with an offset. If a naive
+    timestamp is received, it is interpreted as local time rather than UTC so
+    that we do not introduce a 1-2 hour error during the Swedish summer.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    return value
 
 
 class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -56,8 +83,10 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry = entry
         self.session = session
         self._access_token: str | None = None
-        self._token_expires_at = None
+        self._token_expires_at: datetime | None = None
         self._last_good: dict[str, Any] | None = None
+        self._last_cache_write: datetime | None = None
+        self._cache_max_age = timedelta(minutes=DEFAULT_CACHE_MAX_AGE_MINUTES)
         self._store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
 
     @property
@@ -89,23 +118,33 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Could not load Västtrafik cache")
             return
-        if isinstance(data, dict) and data.get("departures") is not None:
-            self._last_good = data
-            _LOGGER.info(
-                "Restored Västtrafik cache (%s departures, saved %s)",
-                len(data.get("departures") or []),
-                data.get("cached_at"),
-            )
+        if not isinstance(data, dict) or data.get("departures") is None:
+            return
+
+        cached_at = dt_util.parse_datetime(data.get("cached_at") or "")
+        if cached_at is not None:
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            self._last_cache_write = cached_at
+
+        self._last_good = data
+        _LOGGER.info(
+            "Restored Västtrafik cache (%s departures, saved %s)",
+            len(data.get("departures") or []),
+            data.get("cached_at"),
+        )
 
     async def async_save_cache(self, payload: dict[str, Any]) -> None:
         """Persist last good payload to disk."""
+        now = dt_util.utcnow()
         try:
             await self._store.async_save(
                 {
                     **payload,
-                    "cached_at": dt_util.utcnow().isoformat(),
+                    "cached_at": now.isoformat(),
                 }
             )
+            self._last_cache_write = now
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Could not save Västtrafik cache")
 
@@ -136,10 +175,15 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     raise UpdateFailed(f"Failed to get access token: {response.status}")
 
                 result = await response.json()
-                self._access_token = result["access_token"]
+                token = result.get("access_token")
+                if not token:
+                    raise UpdateFailed("No access token in token response")
+                self._access_token = token
                 expires_in = int(result.get("expires_in", 86400))
                 # Refresh 5 minutes before expiry
-                self._token_expires_at = now + timedelta(seconds=max(expires_in - 300, 60))
+                self._token_expires_at = now + timedelta(
+                    seconds=max(expires_in - 300, 60)
+                )
                 return self._access_token
         except ClientError as ex:
             raise UpdateFailed(f"Network error getting token: {ex}") from ex
@@ -158,11 +202,11 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         delay_minutes = 0
         if estimated_time and planned_time:
             try:
-                planned_dt = dt_util.parse_datetime(planned_time)
-                estimated_dt = dt_util.parse_datetime(estimated_time)
+                planned_dt = _aware(dt_util.parse_datetime(planned_time))
+                estimated_dt = _aware(dt_util.parse_datetime(estimated_time))
                 if planned_dt and estimated_dt:
                     delay_minutes = int(
-                        (estimated_dt - planned_dt).total_seconds() / 60
+                        round((estimated_dt - planned_dt).total_seconds() / 60)
                     )
             except (TypeError, ValueError):
                 delay_minutes = 0
@@ -214,58 +258,67 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if line_f not in line and line_f not in designation:
                     continue
 
-            # minutes_until
-            minutes = 0
-            relative = "?"
-            departure_hhmm = "?"
             try:
-                dt = dt_util.parse_datetime(dep["estimated_time"])
+                dt = _aware(dt_util.parse_datetime(dep["estimated_time"]))
                 if dt is None:
                     continue
-                dt = dt_util.as_local(dt)
                 seconds = (dt - now).total_seconds()
-                minutes = int(seconds / 60)
-                # Keep "about to leave" (-1 min) as Nu; drop older
-                if minutes < -1:
+                # Keep departures that are just about to leave; drop older ones.
+                if seconds < -60:
                     continue
-                if minutes <= 0:
-                    relative = "Nu"
-                    minutes = 0
-                elif minutes == 1:
-                    relative = "1 min"
-                else:
-                    relative = f"{minutes} min"
+                minutes = max(0, int(seconds // 60))
+                relative = "Nu" if minutes == 0 else f"{minutes} min"
                 departure_hhmm = dt.strftime("%H:%M")
             except (TypeError, ValueError, KeyError):
                 continue
 
-            dep = {
-                **dep,
-                "departure_time": departure_hhmm,
-                "relative_time": relative,
-                "minutes_until": minutes,
-            }
-            result.append(dep)
+            result.append(
+                {
+                    **dep,
+                    "departure_time": departure_hhmm,
+                    "relative_time": relative,
+                    "minutes_until": minutes,
+                }
+            )
 
-        # Sort by minutes until
         result.sort(key=lambda d: d.get("minutes_until", 9999))
         return result
 
+    @staticmethod
+    def _signature(departures: list[dict[str, Any]]) -> tuple[tuple[Any, ...], ...]:
+        """Stable signature used to avoid writing unchanged data to disk."""
+        return tuple(
+            tuple(dep.get(key) for key in _STABLE_FIELDS) for dep in departures
+        )
+
     def _cached_or_fail(self, reason: str) -> dict[str, Any]:
-        """Return last good data or raise UpdateFailed."""
-        if self._last_good is not None:
-            _LOGGER.warning(
-                "Västtrafik temporary failure (%s) – using cached departures",
-                reason,
-            )
-            cached = dict(self._last_good)
-            cached["from_cache"] = True
-            cached["cache_reason"] = reason
-            return cached
-        raise UpdateFailed(reason)
+        """Return recent last-good data, re-filtered, or raise UpdateFailed."""
+        if self._last_good is None:
+            raise UpdateFailed(reason)
+
+        cached_at = dt_util.parse_datetime(self._last_good.get("cached_at") or "")
+        if cached_at is None:
+            cached_at = dt_util.utcnow() - self._cache_max_age - timedelta(seconds=1)
+        elif cached_at.tzinfo is None:
+            cached_at = cached_at.replace(tzinfo=timezone.utc)
+
+        if dt_util.utcnow() - cached_at > self._cache_max_age:
+            self._last_good = None
+            raise UpdateFailed(f"{reason}; cached departures are too old")
+
+        _LOGGER.warning(
+            "Västtrafik temporary failure (%s) – using cached departures", reason
+        )
+        cached = dict(self._last_good)
+        cached["departures"] = self._apply_filters(
+            list(self._last_good.get("departures") or [])
+        )
+        cached["from_cache"] = True
+        cached["cache_reason"] = reason
+        return cached
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch departures from API; keep last good on transient failures."""
+        """Fetch departures from API; keep recent last-good on transient failures."""
         try:
             token = await self._get_access_token()
         except UpdateFailed as ex:
@@ -278,7 +331,8 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         headers = {"Authorization": f"Bearer {token}"}
         params = {
             "timeSpanInMinutes": time_span,
-            "maxDeparturesPerLine": max_per_line,
+            "maxDeparturesPerLineAndDirection": max_per_line,
+            "limit": 50,
         }
         url = f"{API_BASE}/stop-areas/{self.station_gid}/departures"
 
@@ -324,6 +378,16 @@ class VasttrafikDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "raw_count": len(raw),
             "from_cache": False,
         }
+        previous = self._last_good
         self._last_good = result
-        await self.async_save_cache(result)
+
+        needs_save = (
+            previous is None
+            or self._signature(previous.get("departures") or [])
+            != self._signature(filtered)
+            or self._last_cache_write is None
+            or dt_util.utcnow() - self._last_cache_write >= self._cache_max_age
+        )
+        if needs_save:
+            await self.async_save_cache(result)
         return result

@@ -6,6 +6,9 @@
         "description": "Paste the Authentication Key from the Västtrafik developer portal ({portal}). It is the Base64-encoded client credentials.",
         "data": {
           "auth_key": "Authentication key"
+        },
+        "data_description": {
+          "auth_key": "Base64-encoded 'key:secret' from developer.vasttrafik.se"
         }
       },
       "station": {
@@ -13,6 +16,9 @@
         "description": "Enter part of the stop name ({station_example})",
         "data": {
           "station_name": "Stop name"
+        },
+        "data_description": {
+          "station_name": "For example 'Central', 'Brunnsparken' or a stop number"
         }
       },
       "select_station": {
@@ -20,6 +26,19 @@
         "description": "Choose the correct stop area",
         "data": {
           "station": "Stop"
+        },
+        "data_description": {
+          "station": "The stop area used for departure lookups"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Update authentication key",
+        "description": "The saved authentication key is no longer valid. Paste a new key from {portal}.",
+        "data": {
+          "auth_key": "Authentication key"
+        },
+        "data_description": {
+          "auth_key": "Base64-encoded 'key:secret' from developer.vasttrafik.se"
         }
       }
     },
@@ -31,7 +50,8 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This stop is already configured"
+      "already_configured": "This stop is already configured",
+      "reauth_successful": "Authentication key updated"
     }
   },
   "options": {
@@ -47,6 +67,15 @@
           "time_span_minutes": "Time window (minutes)",
           "max_per_line": "Max departures per line",
           "update_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "direction_filter": "Case-insensitive substring matched against the destination",
+          "line_filter": "Case-insensitive substring matched against line name/designation",
+          "exclude_cancelled": "Cancelled departures are hidden from the sensor",
+          "show_delay": "Append the delay to the textual state",
+          "time_span_minutes": "How far ahead in time to ask the API for departures (15–180)",
+          "max_per_line": "Departures per line and direction (1–10)",
+          "update_interval": "Polling interval in seconds (30–300)"
         }
       }
     }

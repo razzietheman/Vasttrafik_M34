@@ -50,6 +50,8 @@ async def get_access_token(hass: HomeAssistant, auth_key: str) -> str:
             data={"grant_type": "client_credentials"},
             timeout=15,
         ) as response:
+            if response.status in (401, 403):
+                raise InvalidAuth("Invalid authentication key")
             if response.status != 200:
                 text = await response.text()
                 _LOGGER.error("Token request failed: %s - %s", response.status, text)
@@ -71,7 +73,6 @@ async def search_stations(
     """Search stop areas by name."""
     session = async_get_clientsession(hass)
     headers = {"Authorization": f"Bearer {access_token}"}
-    # API: GET /locations/by-text
     url = f"{API_BASE}/locations/by-text"
     params = {"q": query, "types": "stoparea", "limit": 15}
     try:
@@ -86,13 +87,17 @@ async def search_stations(
     except Exception as ex:
         raise CannotConnect(f"Network error: {ex}") from ex
 
-    stations: list[dict[str, str]] = []
-    results = data.get("results") or data.get("stopAreas") or []
     if isinstance(data, list):
-        results = data
+        results: list[dict[str, Any]] = data
+    elif isinstance(data, dict):
+        results = data.get("results") or data.get("stopAreas") or []
+    else:
+        results = []
 
+    stations: list[dict[str, str]] = []
     for item in results:
-        # Support a few possible shapes from API
+        if not isinstance(item, dict):
+            continue
         gid = item.get("gid") or item.get("stopAreaGid") or item.get("id")
         name = (
             item.get("name")
@@ -124,6 +129,7 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._auth_key: str | None = None
         self._access_token: str | None = None
         self._stations: list[dict[str, str]] = []
+        self._reauth_entry: config_entries.ConfigEntry | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -166,20 +172,24 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            query = user_input[CONF_STATION_NAME].strip()
-            try:
-                assert self._access_token is not None
-                stations = await search_stations(self.hass, self._access_token, query)
-                if not stations:
-                    errors["base"] = "no_stations"
-                else:
-                    self._stations = stations
-                    return await self.async_step_select_station()
-            except CannotConnect:
+            if self._access_token is None:
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during station search")
-                errors["base"] = "unknown"
+            else:
+                query = user_input[CONF_STATION_NAME].strip()
+                try:
+                    stations = await search_stations(
+                        self.hass, self._access_token, query
+                    )
+                    if not stations:
+                        errors["base"] = "no_stations"
+                    else:
+                        self._stations = stations
+                        return await self.async_step_select_station()
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during station search")
+                    errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="station",
@@ -238,6 +248,47 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle reauthentication when the API key has changed."""
+        self._reauth_entry = self._get_reauth_entry()
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm the new authentication key."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            auth_key = user_input[CONF_AUTH_KEY].strip()
+            try:
+                await get_access_token(self.hass, auth_key)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reauthentication")
+                errors["base"] = "unknown"
+            else:
+                if self._reauth_entry is None:
+                    errors["base"] = "unknown"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        self._reauth_entry,
+                        data={**self._reauth_entry.data, CONF_AUTH_KEY: auth_key},
+                    )
+                    return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_AUTH_KEY): str}),
+            errors=errors,
+            description_placeholders={
+                "portal": "https://developer.vasttrafik.se",
+            },
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -255,7 +306,7 @@ class VasttrafikOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(data=user_input)
 
         current = self.config_entry.options
         return self.async_show_form(

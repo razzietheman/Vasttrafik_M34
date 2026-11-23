@@ -1,87 +1,88 @@
-# Integration Quality Scale Status
-# This file tracks which quality scale rules have been implemented
+# Integration Quality Scale Status – Västtrafik M34 2.0.5
+# Uppdaterad för att spegla faktisk implementation (inga hänvisningar till gamla radnummer).
 
 rules:
-  # Bronze tier rules
   action-setup:
     status: exempt
-    comment: This integration does not provide service actions, only sensors for monitoring departures
-  
+    comment: Integrationen tillhandahåller inga service actions, bara sensorer.
+
   appropriate-polling:
     status: done
-    comment: Polling interval set to 60 seconds (SCAN_INTERVAL = timedelta(minutes=1)) in sensor.py
-  
-  brands:
-    status: done
     comment: |
-      Icon (icon.png) and logo (logo.png) created in custom_components/vasttrafik_m34/icons/
-      Based on Västtrafik official logo with "M34" text in orange.
-      Assets available for local use and ready for submission to home-assistant/brands repository.
-      See BRANDING_ASSETS_GUIDE.md for complete instructions.
-  
+      DataUpdateCoordinator använder 60 s som standard (30–300 s via alternativ).
+      Delad aiohttp-session från Home Assistant används för alla anrop.
+
+  brands:
+    status: exempt
+    comment: |
+      Ikon/logo för HACS finns i repositoryt. Brand-assets för Home Assistant
+      hanteras i home-assistant/brands och ingår inte i en custom integration.
+
   common-modules:
     status: done
-    comment: Common patterns isolated in const.py, config flow patterns in config_flow.py
-  
+    comment: Konstanter i const.py, API/logik i coordinator.py, flöden i config_flow.py.
+
   config-flow-test-coverage:
     status: done
-    comment: Config flow tests in tests/test_basic.py verify strings.json structure and field names
-  
+    comment: |
+      tests/test_config_flow.py och tests/test_init.py kör mot HA:s testfixtures
+      och täcker auth, sökning, val, dublett, reauth och options.
+
   config-flow:
     status: done
     comment: |
-      - Full GUI configuration via config flow
-      - Uses data_description in strings.json for all fields
-      - Correctly uses ConfigEntry.data for persistent configuration
-      - Three-step flow: auth-key → station search → station selection
-  
+      GUI-flöde i tre steg (nyckel → sök → välj), med data_description i
+      strings.json/translations/sv.json. Reauth-flöde för utgången nyckel.
+
   dependency-transparency:
     status: done
-    comment: Only dependency is aiohttp>=3.8.0 from PyPI with public CI pipeline
-  
+    comment: Inga externa PyPI-krav i manifest.json; aiohttp kommer från Home Assistant själv.
+
   docs-actions:
     status: exempt
-    comment: This integration does not provide service actions
-  
+    comment: Inga service actions att dokumentera.
+
   docs-high-level-description:
     status: done
-    comment: README.md includes description of Västtrafik as public transport provider in Gothenburg
-  
+    comment: README.md beskriver integrationen och Västtrafiks API.
+
   docs-installation-instructions:
     status: done
-    comment: README.md provides step-by-step installation instructions via HACS and manual installation
-  
+    comment: README.md innehåller HACS- och manuell installation samt API-nyckelssteg.
+
   docs-removal-instructions:
     status: done
-    comment: README.md includes removal instructions in the documentation
-  
+    comment: README.md har en egen avinstallationssektion.
+
   entity-event-setup:
     status: exempt
-    comment: This integration uses DataUpdateCoordinator, not event subscriptions
-  
+    comment: DataUpdateCoordinator används, inga push-händelser.
+
   entity-unique-id:
     status: done
-    comment: Entities use unique_id format "vasttrafik_{station_gid}" in sensor.py line 236
-  
+    comment: |
+      Stabila unique_id: <gid>, <gid>_next_departure och <gid>_minutes_until i sensor.py.
+
   has-entity-name:
     status: done
-    comment: Sensor uses _attr_has_entity_name = True and _attr_name = None in sensor.py line 221-222
-  
+    comment: Alla entiteter använder _attr_has_entity_name = True.
+
   runtime-data:
     status: done
     comment: |
-      Coordinator stored in ConfigEntry.runtime_data in sensor.py line 52
-      Type alias VasttrafikConfigEntry = ConfigEntry[VasttrafikDataUpdateCoordinator] in __init__.py line 23
-      Used throughout __init__.py and sensor.py for type safety
-  
+      Coordinator lagras i entry.runtime_data (typad som VasttrafikConfigEntry)
+      och läses av sensor-plattformen.
+
   test-before-configure:
     status: done
-    comment: Config flow validates auth-key by testing OAuth2 token retrieval before allowing continuation
-  
+    comment: config_flödet verifierar nyckeln mot /token innan hållplats sparas.
+
   test-before-setup:
     status: done
-    comment: __init__.py tests OAuth2 authentication before forwarding to platforms, raises ConfigEntryNotReady on failure
-  
+    comment: |
+      async_setup_entry kör coordinatorns första uppdatering och låter
+      async_config_entry_first_refresh höja ConfigEntryNotReady vid fel utan giltig cache.
+
   unique-config-entry:
     status: done
-    comment: Config flow uses async_set_unique_id and _abort_if_unique_id_configured to prevent duplicate stations
+    comment: async_set_unique_id + _abort_if_unique_id_configured på hållplatsens gid.

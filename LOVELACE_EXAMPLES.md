@@ -17,11 +17,11 @@ Detta format är mycket enklare att arbeta med och ger dig full kontroll!stavla 
 
 Här är flera sätt att visa dina Västtrafik-avgångar som en snygg avgångstavla i Home Assistant!
 
-> **🆕 Nytt i v2.4.0:** Använd `departures_json` för strukturerad data som är lättare att arbeta med!
+> **🆕 Nytt i v2.0.5:** Använd `departures_json` för strukturerad data som är lättare att arbeta med!
 
 ---
 
-## � Alternativ 0: Markdown Card med JSON (Nytt i v2.4.0!)
+## � Alternativ 0: Markdown Card med JSON (Nytt i v2.0.5!)
 
 ### Modern Avgångstavla med departures_json
 Detta format är mycket enklare att arbeta med och ger dig full kontroll!

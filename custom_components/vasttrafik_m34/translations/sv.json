@@ -6,6 +6,9 @@
         "description": "Klistra in autentiseringsnyckeln från Västtrafiks utvecklarportal ({portal}). Det är Base64-kodade klientuppgifter.",
         "data": {
           "auth_key": "Autentiseringsnyckel"
+        },
+        "data_description": {
+          "auth_key": "Base64-kodat 'nyckel:hemlighet' från developer.vasttrafik.se"
         }
       },
       "station": {
@@ -13,6 +16,9 @@
         "description": "Ange del av hållplatsnamnet ({station_example})",
         "data": {
           "station_name": "Hållplatsnamn"
+        },
+        "data_description": {
+          "station_name": "T.ex. 'Central', 'Brunnsparken' eller ett hållplatsnummer"
         }
       },
       "select_station": {
@@ -20,6 +26,19 @@
         "description": "Välj rätt hållplatsområde",
         "data": {
           "station": "Hållplats"
+        },
+        "data_description": {
+          "station": "Hållplatsområdet som används för avgångssökningar"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Uppdatera autentiseringsnyckel",
+        "description": "Den sparade autentiseringsnyckeln är inte längre giltig. Klistra in en ny nyckel från {portal}.",
+        "data": {
+          "auth_key": "Autentiseringsnyckel"
+        },
+        "data_description": {
+          "auth_key": "Base64-kodat 'nyckel:hemlighet' från developer.vasttrafik.se"
         }
       }
     },
@@ -31,7 +50,8 @@
       "unknown": "Oväntat fel"
     },
     "abort": {
-      "already_configured": "Denna hållplats är redan konfigurerad"
+      "already_configured": "Denna hållplats är redan konfigurerad",
+      "reauth_successful": "Autentiseringsnyckeln har uppdaterats"
     }
   },
   "options": {
@@ -47,6 +67,15 @@
           "time_span_minutes": "Tidsfönster (minuter)",
           "max_per_line": "Max avgångar per linje",
           "update_interval": "Uppdateringsintervall (sekunder)"
+        },
+        "data_description": {
+          "direction_filter": "Del av destinationen, skiftlägesokänslig",
+          "line_filter": "Del av linjens namn/beteckning, skiftlägesokänslig",
+          "exclude_cancelled": "Inställda avgångar döljs från sensorn",
+          "show_delay": "Lägg till förseningen i textutgåvan av tillståndet",
+          "time_span_minutes": "Hur långt fram i tiden API:t ska söka (15–180)",
+          "max_per_line": "Avgångar per linje och riktning (1–10)",
+          "update_interval": "Uppdateringsintervall i sekunder (30–300)"
         }
       }
     }
